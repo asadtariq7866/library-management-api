@@ -1,8 +1,9 @@
 from datetime import date, timedelta
+from typing import Optional
 from models import db, Book, Member, Loan
 
 
-def validate_fields(data, required_fields):
+def validate_fields(data: dict, required_fields: list[str]) -> Optional[str]:
     """Check ke saare required fields maujood hain. Missing fields ka error message deta hai, warna None."""
     missing = []
     for field in required_fields:
@@ -15,18 +16,26 @@ def validate_fields(data, required_fields):
     return None
 
 
-def create_book(data):
+def create_book(data: dict) -> tuple[dict, int]:
     """Nayi book banata hai. Returns (result_dict, status_code)."""
     error = validate_fields(data, ['title', 'author', 'isbn', 'copies_total'])
     if error:
         return {"error": error}, 400
     
+    copies_total = data.get('copies_total')
+    
+    if not isinstance(copies_total, int):
+        return {"error": "copies_total must be an integer"}, 400
+    
+    if copies_total < 0:
+        return {"error": "copies_total cannot be negative"}, 400
+    
     new_book = Book(
         title=data.get('title'),
         author=data.get('author'),
         isbn=data.get('isbn'),
-        copies_total=data.get('copies_total'),
-        copies_available=data.get('copies_total')
+        copies_total=copies_total,
+        copies_available=copies_total
     )
     
     db.session.add(new_book)
@@ -42,7 +51,7 @@ def create_book(data):
     }, 201
 
 
-def get_all_books():
+def get_all_books() -> tuple[dict, int]:
     """Sari books ki list deta hai."""
     all_books = Book.query.all()
     result = []
@@ -58,7 +67,7 @@ def get_all_books():
     return {"books": result}, 200
 
 
-def get_book_by_id(book_id):
+def get_book_by_id(book_id: int) -> tuple[dict, int]:
     """Ek specific book ki detail deta hai."""
     book = Book.query.get(book_id)
     if book is None:
@@ -74,7 +83,7 @@ def get_book_by_id(book_id):
     }, 200
 
 
-def create_member(data):
+def create_member(data: dict) -> tuple[dict, int]:
     """Naya member register karta hai."""
     error = validate_fields(data, ['name', 'email'])
     if error:
@@ -97,7 +106,7 @@ def create_member(data):
     }, 201
 
 
-def borrow_book(data):
+def borrow_book(data: dict) -> tuple[dict, int]:
     """Book borrow karta hai — Loan banata hai aur copies_available kam karta hai."""
     error = validate_fields(data, ['book_id', 'member_id'])
     if error:
@@ -138,7 +147,7 @@ def borrow_book(data):
     }, 201
 
 
-def return_loan(loan_id):
+def return_loan(loan_id: int) -> tuple[dict, int]:
     """Book return karta hai — copies_available badhata hai."""
     loan = Loan.query.get(loan_id)
     if loan is None:
@@ -164,7 +173,7 @@ def return_loan(loan_id):
     }, 200
 
 
-def get_member_current_loans(member_id):
+def get_member_current_loans(member_id: int) -> tuple[dict, int]:
     """Member ki current (return na hui) loans deta hai."""
     member = Member.query.get(member_id)
     if member is None:
@@ -184,7 +193,7 @@ def get_member_current_loans(member_id):
     return {"member": member.name, "current_loans": result}, 200
 
 
-def get_overdue_loans():
+def get_overdue_loans() -> tuple[dict, int]:
     """Saari overdue loans deta hai (due_date guzar chuki, returned nahi)."""
     today = date.today()
     overdue_loans = Loan.query.filter(
@@ -204,13 +213,13 @@ def get_overdue_loans():
     return {"overdue_loans": result}, 200
 
 
-def get_stats():
+def get_stats() -> tuple[dict, int]:
     """Library ke overall stats deta hai."""
     total_books = Book.query.count()
     total_members = Member.query.count()
     active_loans = Loan.query.filter_by(returned_date=None).count()
     
-    top_member = None
+    top_member: Optional[str] = None
     top_count = 0
     all_members = Member.query.all()
     for member in all_members:
